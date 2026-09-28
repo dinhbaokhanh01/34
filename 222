@@ -1,0 +1,535 @@
+2. Chi tiết Mã nguồn
+pom.xml
+XML
+<project xmlns="http://maven.apache.org/POM/4.0.0" 
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.codegym</groupId>
+    <artifactId>user-management</artifactId>
+    <packaging>war</packaging>
+    <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <version>6.0.0</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet.jsp</groupId>
+            <artifactId>jakarta.servlet.jsp-api</artifactId>
+            <version>3.1.1</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet.jsp.jstl</groupId>
+            <artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.web</groupId>
+            <artifactId>jakarta.servlet.jsp.jstl</artifactId>
+            <version>3.0.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <version>8.3.0</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>user-management</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>3.4.0</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+Tầng Model & DAO
+User.java
+Java
+package com.codegym.model;
+
+public class User {
+    protected int id;
+    protected String name;
+    protected String email;
+    protected String country;
+
+    public User() {}
+
+    public User(String name, String email, String country) {
+        this.name = name;
+        this.email = email;
+        this.country = country;
+    }
+
+    public User(int id, String name, String email, String country) {
+        this.id = id;
+        this.name = name;
+        this.email = email;
+        this.country = country;
+    }
+
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    public String getCountry() { return country; }
+    public void setCountry(String country) { this.country = country; }
+}
+IUserDAO.java
+Java
+package com.codegym.dao;
+
+import com.codegym.model.User;
+import java.util.List;
+
+public interface IUserDAO {
+    void insertUser(User user) throws Exception;
+    User selectUser(int id);
+    List<User> selectAllUsers();
+    boolean deleteUser(int id) throws Exception;
+    boolean updateUser(User user) throws Exception;
+}
+UserDAO.java
+Lưu ý: Hãy cập nhật jdbcUsername và jdbcPassword cho khớp với tài khoản MySQL trên máy của bạn.
+
+Java
+package com.codegym.dao;
+
+import com.codegym.model.User;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+public class UserDAO implements IUserDAO {
+    private String jdbcURL = "jdbc:mysql://localhost:3306/demo?useSSL=false&allowPublicKeyRetrieval=true";
+    private String jdbcUsername = "root";
+    private String jdbcPassword = "password"; 
+
+    private static final String INSERT_USERS_SQL = "INSERT INTO users (name, email, country) VALUES (?, ?, ?);";
+    private static final String SELECT_USER_BY_ID = "SELECT id, name, email, country FROM users WHERE id = ?;";
+    private static final String SELECT_ALL_USERS = "SELECT * FROM users;";
+    private static final String DELETE_USERS_SQL = "DELETE FROM users WHERE id = ?;";
+    private static final String UPDATE_USERS_SQL = "UPDATE users SET name = ?, email = ?, country = ? WHERE id = ?;";
+
+    public UserDAO() {}
+
+    protected Connection getConnection() {
+        Connection connection = null;
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            connection = DriverManager.getConnection(jdbcURL, jdbcUsername, jdbcPassword);
+        } catch (SQLException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+        return connection;
+    }
+
+    @Override
+    public void insertUser(User user) throws Exception {
+        try (Connection connection = getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(INSERT_USERS_SQL)) {
+            preparedStatement.setString(1, user.getName());
+            preparedStatement.setString(2, user.getEmail());
+            preparedStatement.setString(3, user.getCountry());
+            preparedStatement.executeUpdate();
+        }
+    }
+
+    @Override
+    public User selectUser(int id) {
+        User user = null;
+        try (Connection connection = getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(SELECT_USER_BY_ID)) {
+            preparedStatement.setInt(1, id);
+            ResultSet rs = preparedStatement.executeQuery();
+
+            while (rs.next()) {
+                String name = rs.getString("name");
+                String email = rs.getString("email");
+                String country = rs.getString("country");
+                user = new User(id, name, email, country);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return user;
+    }
+
+    @Override
+    public List<User> selectAllUsers() {
+        List<User> users = new ArrayList<>();
+        try (Connection connection = getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(SELECT_ALL_USERS)) {
+            ResultSet rs = preparedStatement.executeQuery();
+            while (rs.next()) {
+                int id = rs.getInt("id");
+                String name = rs.getString("name");
+                String email = rs.getString("email");
+                String country = rs.getString("country");
+                users.add(new User(id, name, email, country));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return users;
+    }
+
+    @Override
+    public boolean deleteUser(int id) throws Exception {
+        boolean rowDeleted;
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(DELETE_USERS_SQL)) {
+            statement.setInt(1, id);
+            rowDeleted = statement.executeUpdate() > 0;
+        }
+        return rowDeleted;
+    }
+
+    @Override
+    public boolean updateUser(User user) throws Exception {
+        boolean rowUpdated;
+        try (Connection connection = getConnection();
+             PreparedStatement statement = connection.prepareStatement(UPDATE_USERS_SQL)) {
+            statement.setString(1, user.getName());
+            statement.setString(2, user.getEmail());
+            statement.setString(3, user.getCountry());
+            statement.setInt(4, user.getId());
+            rowUpdated = statement.executeUpdate() > 0;
+        }
+        return rowUpdated;
+    }
+}
+Tầng Controller
+UserServlet.java
+Java
+package com.codegym.controller;
+
+import com.codegym.dao.UserDAO;
+import com.codegym.model.User;
+import jakarta.servlet.RequestDispatcher;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.sql.SQLException;
+import java.util.List;
+
+@WebServlet(name = "UserServlet", urlPatterns = "/users")
+public class UserServlet extends HttpServlet {
+    private static final long serialVersionUID = 1L;
+    private UserDAO userDAO;
+
+    public void init() {
+        userDAO = new UserDAO();
+    }
+
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        request.setCharacterEncoding("UTF-8");
+        String action = request.getParameter("action");
+        if (action == null) {
+            action = "";
+        }
+        try {
+            switch (action) {
+                case "create":
+                    insertUser(request, response);
+                    break;
+                case "edit":
+                    updateUser(request, response);
+                    break;
+                case "delete":
+                    deleteUser(request, response);
+                    break;
+            }
+        } catch (Exception ex) {
+            throw new ServletException(ex);
+        }
+    }
+
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        request.setCharacterEncoding("UTF-8");
+        String action = request.getParameter("action");
+        if (action == null) {
+            action = "";
+        }
+
+        try {
+            switch (action) {
+                case "create":
+                    showNewForm(request, response);
+                    break;
+                case "edit":
+                    showEditForm(request, response);
+                    break;
+                case "delete":
+                    showDeleteForm(request, response);
+                    break;
+                default:
+                    listUser(request, response);
+                    break;
+            }
+        } catch (Exception ex) {
+            throw new ServletException(ex);
+        }
+    }
+
+    private void listUser(HttpServletRequest request, HttpServletResponse response)
+            throws SQLException, IOException, ServletException {
+        List<User> listUser = userDAO.selectAllUsers();
+        request.setAttribute("listUser", listUser);
+        RequestDispatcher dispatcher = request.getRequestDispatcher("user/list.jsp");
+        dispatcher.forward(request, response);
+    }
+
+    private void showNewForm(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        RequestDispatcher dispatcher = request.getRequestDispatcher("user/create.jsp");
+        dispatcher.forward(request, response);
+    }
+
+    private void showEditForm(HttpServletRequest request, HttpServletResponse response)
+            throws SQLException, ServletException, IOException {
+        int id = Integer.parseInt(request.getParameter("id"));
+        User existingUser = userDAO.selectUser(id);
+        RequestDispatcher dispatcher = request.getRequestDispatcher("user/edit.jsp");
+        request.setAttribute("user", existingUser);
+        dispatcher.forward(request, response);
+    }
+
+    private void showDeleteForm(HttpServletRequest request, HttpServletResponse response)
+            throws SQLException, ServletException, IOException {
+        int id = Integer.parseInt(request.getParameter("id"));
+        User user = userDAO.selectUser(id);
+        RequestDispatcher dispatcher = request.getRequestDispatcher("user/delete.jsp");
+        request.setAttribute("user", user);
+        dispatcher.forward(request, response);
+    }
+
+    private void insertUser(HttpServletRequest request, HttpServletResponse response)
+            throws Exception {
+        String name = request.getParameter("name");
+        String email = request.getParameter("email");
+        String country = request.getParameter("country");
+        User newUser = new User(name, email, country);
+        userDAO.insertUser(newUser);
+        response.sendRedirect("users");
+    }
+
+    private void updateUser(HttpServletRequest request, HttpServletResponse response)
+            throws Exception {
+        int id = Integer.parseInt(request.getParameter("id"));
+        String name = request.getParameter("name");
+        String email = request.getParameter("email");
+        String country = request.getParameter("country");
+
+        User user = new User(id, name, email, country);
+        userDAO.updateUser(user);
+        response.sendRedirect("users");
+    }
+
+    private void deleteUser(HttpServletRequest request, HttpServletResponse response)
+            throws Exception {
+        int id = Integer.parseInt(request.getParameter("id"));
+        userDAO.deleteUser(id);
+        response.sendRedirect("users");
+    }
+}
+Tầng View (JSP Files)
+src/main/webapp/user/list.jsp
+Java
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Quản lý User</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f8fafc; }
+        h2 { color: #1b2a7a; text-align: center; }
+        table { width: 80%; margin: 20px auto; border-collapse: collapse; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #1b2a7a; color: white; }
+        tr:hover { background-color: #f1f5f9; }
+        .btn { padding: 8px 12px; text-decoration: none; border-radius: 4px; color: white; font-weight: bold; font-size: 14px; }
+        .btn-add { background-color: #27ae60; margin-left: 10%; display: inline-block; margin-bottom: 15px; }
+        .btn-edit { background-color: #2980b9; margin-right: 5px; }
+        .btn-delete { background-color: #c0392b; }
+    </style>
+</head>
+<body>
+    <h2>Danh Sách Người Dùng (Users)</h2>
+    <a href="${pageContext.request.contextPath}/users?action=create" class="btn btn-add">Thêm mới User</a>
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Tên User</th>
+            <th>Email</th>
+            <th>Quốc gia</th>
+            <th>Hành động</th>
+        </tr>
+        <c:forEach var="user" items="${requestScope.listUser}">
+            <tr>
+                <td><c:out value="${user.id}" /></td>
+                <td><c:out value="${user.name}" /></td>
+                <td><c:out value="${user.email}" /></td>
+                <td><c:out value="${user.country}" /></td>
+                <td>
+                    <a href="${pageContext.request.contextPath}/users?action=edit&id=${user.id}" class="btn btn-edit">Sửa</a>
+                    <a href="${pageContext.request.contextPath}/users?action=delete&id=${user.id}" class="btn btn-delete">Xóa</a>
+                </td>
+            </tr>
+        </c:forEach>
+    </table>
+</body>
+</html>
+src/main/webapp/user/create.jsp
+Java
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Thêm Mới User</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f8fafc; }
+        .container { width: 50%; max-width: 500px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { color: #1b2a7a; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; color: #333; }
+        input[type="text"], input[type="email"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        .btn { padding: 10px 15px; background-color: #27ae60; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; margin-top: 10px; }
+        .btn:hover { background-color: #219150; }
+        a { display: block; text-align: center; margin-top: 15px; color: #1b2a7a; text-decoration: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Thêm Mới User</h2>
+        <form action="${pageContext.request.contextPath}/users?action=create" method="post">
+            <div class="form-group">
+                <label>Tên đầy đủ:</label>
+                <input type="text" name="name" required />
+            </div>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" name="email" required />
+            </div>
+            <div class="form-group">
+                <label>Quốc gia:</label>
+                <input type="text" name="country" required />
+            </div>
+            <button type="submit" class="btn">Lưu thông tin</button>
+        </form>
+        <a href="${pageContext.request.contextPath}/users">Quay lại danh sách</a>
+    </div>
+</body>
+</html>
+src/main/webapp/user/edit.jsp
+Java
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Chỉnh Sửa User</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f8fafc; }
+        .container { width: 50%; max-width: 500px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { color: #1b2a7a; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; color: #333; }
+        input[type="text"], input[type="email"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        .btn { padding: 10px 15px; background-color: #2980b9; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; width: 100%; margin-top: 10px; }
+        .btn:hover { background-color: #2471a3; }
+        a { display: block; text-align: center; margin-top: 15px; color: #1b2a7a; text-decoration: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Cập Nhật Thông Tin User</h2>
+        <form action="${pageContext.request.contextPath}/users?action=edit" method="post">
+            <input type="hidden" name="id" value="<c:out value='${requestScope.user.id}' />" />
+            <div class="form-group">
+                <label>Tên đầy đủ:</label>
+                <input type="text" name="name" value="<c:out value='${requestScope.user.name}' />" required />
+            </div>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" name="email" value="<c:out value='${requestScope.user.email}' />" required />
+            </div>
+            <div class="form-group">
+                <label>Quốc gia:</label>
+                <input type="text" name="country" value="<c:out value='${requestScope.user.country}' />" required />
+            </div>
+            <button type="submit" class="btn">Cập nhật ngay</button>
+        </form>
+        <a href="${pageContext.request.contextPath}/users">Quay lại danh sách</a>
+    </div>
+</body>
+</html>
+src/main/webapp/user/delete.jsp
+Java
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Xác nhận Xóa User</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 30px; background-color: #f8fafc; text-align: center; }
+        .container { width: 40%; max-width: 450px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { color: #c0392b; margin-top: 0; }
+        .info-box { background: #f9f9f9; padding: 15px; border-radius: 4px; margin-bottom: 20px; text-align: left; }
+        .btn { padding: 10px 20px; color: white; border: none; cursor: pointer; text-decoration: none; border-radius: 4px; font-weight: bold; margin: 0 5px; display: inline-block;}
+        .btn-delete { background-color: #c0392b; }
+        .btn-delete:hover { background-color: #a93226; }
+        .btn-cancel { background-color: #95a5a6; }
+        .btn-cancel:hover { background-color: #7f8c8d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Xác Nhận Xóa User!</h2>
+        <p>Bạn có chắc chắn muốn xóa User này khỏi hệ thống cơ sở dữ liệu vĩnh viễn không?</p>
+        
+        <div class="info-box">
+            <p><strong>Tên:</strong> ${requestScope.user.name}</p>
+            <p><strong>Email:</strong> ${requestScope.user.email}</p>
+            <p><strong>Quốc gia:</strong> ${requestScope.user.country}</p>
+        </div>
+        
+        <form action="${pageContext.request.contextPath}/users?action=delete" method="post">
+            <input type="hidden" name="id" value="${requestScope.user.id}" />
+            <button type="submit" class="btn btn-delete">Đồng ý Xóa</button>
+            <a href="${pageContext.request.contextPath}/users" class="btn btn-cancel">Hủy bỏ</a>
+        </form>
+    </div>
+</body>
+</html>
